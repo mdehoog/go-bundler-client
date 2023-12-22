@@ -15,6 +15,8 @@ import (
 type EthClient interface {
 	SendUserOperation(ctx context.Context, op *userop.UserOperation, entryPoint common.Address) (common.Hash, error)
 	EstimateUserOperationGas(ctx context.Context, op *userop.UserOperation, entryPoint common.Address) (*gas.GasEstimates, error)
+	// EstimateUserOperationGasWithOverrides is a non-spec method supported by some bundlers (e.g. Stackup)
+	EstimateUserOperationGasWithOverrides(ctx context.Context, op *userop.UserOperation, entryPoint common.Address, stateOverrides map[common.Address]OverrideAccount) (*gas.GasEstimates, error)
 	GetUserOperationReceipt(ctx context.Context, userOpHash common.Hash) (*filter.UserOperationReceipt, error)
 	GetUserOperationByHash(ctx context.Context, userOpHash common.Hash) (*filter.HashLookupResult, error)
 	SupportedEntryPoints(ctx context.Context) ([]common.Address, error)
@@ -62,6 +64,15 @@ func (c *RpcClient) SendUserOperation(ctx context.Context, op *userop.UserOperat
 func (c *RpcClient) EstimateUserOperationGas(ctx context.Context, op *userop.UserOperation, entryPoint common.Address) (*gas.GasEstimates, error) {
 	var estimate gas.GasEstimates
 	err := c.c.CallContext(ctx, &estimate, "eth_estimateUserOperationGas", op, entryPoint)
+	if err != nil {
+		return nil, err
+	}
+	return &estimate, nil
+}
+
+func (c *RpcClient) EstimateUserOperationGasWithOverrides(ctx context.Context, op *userop.UserOperation, entryPoint common.Address, stateOverrides map[common.Address]OverrideAccount) (*gas.GasEstimates, error) {
+	var estimate gas.GasEstimates
+	err := c.c.CallContext(ctx, &estimate, "eth_estimateUserOperationGas", op, entryPoint, stateOverrides)
 	if err != nil {
 		return nil, err
 	}
@@ -169,4 +180,12 @@ func (uo *UserOperation) ToUserOperation() *userop.UserOperation {
 		PaymasterAndData:     uo.PaymasterAndData,
 		Signature:            uo.Signature,
 	}
+}
+
+type OverrideAccount struct {
+	Nonce     *hexutil.Uint64              `json:"nonce"`
+	Code      *hexutil.Bytes               `json:"code"`
+	Balance   *hexutil.Big                 `json:"balance"`
+	State     *map[common.Hash]common.Hash `json:"state"`
+	StateDiff *map[common.Hash]common.Hash `json:"stateDiff"`
 }
